@@ -57,11 +57,12 @@ def run_audit(req: RunRequest):
             title = page.locator("h1").first.text_content().strip()
 
             
+
 # =========================
-# OP / Author extraction
+# Author (OP) extraction
 # =========================
 
-# ✅ Always define first_post (safe fallback)
+# ✅ Safe fallback
 first_post = page
 
 possible_post_selectors = [
@@ -77,7 +78,7 @@ for selector in possible_post_selectors:
         first_post = locator.first
         break
 
-# ✅ AUTHOR NAME (from qa-username link)
+# ✅ AUTHOR NAME (qa-username)
 name_locator = first_post.locator(
     "a.qa-username, a.username"
 )
@@ -88,24 +89,31 @@ author_name = (
     else "UNKNOWN"
 )
 
-# ✅ AUTHOR ROLE + TIMELINE (from author-info)
+# ✅ AUTHOR ROLE (rank-title inside author-info)
+role_locator = first_post.locator(
+    "div.author-info span.rank-title"
+)
+
+author_role = (
+    role_locator.first.text_content().strip()
+    if role_locator.count() > 0
+    else "UNKNOWN"
+)
+
+# ✅ POSTED TIME (remaining text in author-info)
 author_info_locator = first_post.locator(
     "div.author-info"
 )
 
-author_info_text = (
-    author_info_locator.first.text_content().strip()
-    if author_info_locator.count() > 0
-    else ""
-)
-
-author_role = "UNKNOWN"
 posted_ago = "UNKNOWN"
 
-if "·" in author_info_text:
-    author_role, posted_ago = [x.strip() for x in author_info_text.split("·", 1)]
-else:
-    posted_ago = author_info_text
+if author_info_locator.count() > 0:
+    info_text = author_info_locator.first.text_content().strip()
+    # Remove role text if present
+    if author_role != "UNKNOWN":
+        info_text = info_text.replace(author_role, "").replace("·", "").strip()
+    posted_ago = info_text
+
 
 
             # ✅ Fallback-safe first post container
