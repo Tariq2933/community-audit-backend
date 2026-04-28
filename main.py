@@ -21,6 +21,12 @@ class RunRequest(BaseModel):
 @app.post("/run")
 def run_audit(req: RunRequest):
 
+    # ----------------------------
+    # Playwright browser lifecycle
+    # ----------------------------
+    # We use Playwright in synchronous mode.
+    # Chromium is launched headless with extra flags
+    # required for Render / Linux containers.
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -32,38 +38,84 @@ def run_audit(req: RunRequest):
             ]
         )
 
+        # Create a new browser tab (page)
         page = browser.new_page()
-        thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
+
+        # ----------------------------
+        # Navigate to thread URL
+        # ----------------------------
+        # IMPORTANT:
+        # req.board MUST be a FULL THREAD URL, e.g.
+        # https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-...-1301933
+        thread_url = req.board
         page.goto(thread_url, timeout=60000)
 
+        # ----------------------------
+        # Extract thread title
+        # ----------------------------
+        # Every Adobe Community thread has an <h1>.
+        # Board pages also have <h1> ("Questions"),
+        # which is why board URLs produce 0 posts.
         page.wait_for_selector("h1", timeout=30000)
         title = page.locator("h1").first.text_content().strip()
 
+        # ----------------------------
+        # Locate all posts in the thread
+        # ----------------------------
+        # This selector intentionally covers:
+        #   - Original post (OP)
+        #   - All replies
+        #
+        # If this list is empty, it usually means
+        # a board URL was passed instead of a thread URL.
         post_blocks = page.locator(
             "article.topic-wrapper, div.threaded-reply-item[role='article']"
         )
 
         posts = []
 
+        # --------------------------------------------------
+        # Iterate through OP + replies
+        # --------------------------------------------------
         for i in range(post_blocks.count()):
             post = post_blocks.nth(i)
+
+            # First post is OP, rest are replies
             position = "OP" if i == 0 else "Reply"
 
-            # Author name
+            # ----------------------------
+            # Extract author name
+            # ----------------------------
+            # qa-username is consistent across OP and replies
             name_locator = post.locator("a.qa-username")
             author_name = (
                 name_locator.first.text_content().strip()
                 if name_locator.count() > 0 else "UNKNOWN"
             )
 
-            # Author role
+            # ----------------------------
+            # Extract author role
+            # ----------------------------
+            # rank-title tells us:
+            # Participant / Community Manager / Legend / etc.
             role_locator = post.locator("span.rank-title")
             author_role = (
                 role_locator.first.text_content().strip()
                 if role_locator.count() > 0 else "UNKNOWN"
             )
 
-            # Date parsing
+            # ----------------------------
+            # Extract and split date info
+            # ----------------------------
+            # Adobe combines relative + absolute dates in one block.
+            # Example text:
+            #   "Participant · 1 year agoApril 24, 2025"
+            #
+            # We:
+            #   - Remove role text
+            #   - Use regex to extract:
+            #       posted_ago  -> "1 year ago"
+            #       posted_date -> "April 24, 2025"
             posted_ago = "UNKNOWN"
             posted_date = "UNKNOWN"
 
@@ -80,8 +132,16 @@ def run_audit(req: RunRequest):
                 if date_match:
                     posted_date = date_match.group(0)
 
-            # Message text
+            # ----------------------------
+            # Extract message text
+            # ----------------------------
+            # New editor posts use:
+            #   div.post__content.post__content--new-editor
+            #
+            # Legacy posts (older threads) use:
+            #   div.post.qa-topic-post-box
             message_text = ""
+
             new_editor = post.locator("div.post__content.post__content--new-editor")
             if new_editor.count() > 0:
                 message_text = "\n".join(
@@ -94,6 +154,9 @@ def run_audit(req: RunRequest):
                 if legacy.count() > 0:
                     message_text = legacy.first.text_content().strip()
 
+            # ----------------------------
+            # Append post to results
+            # ----------------------------
             posts.append({
                 "position": position,
                 "author_name": author_name,
@@ -103,8 +166,13 @@ def run_audit(req: RunRequest):
                 "message_text": message_text
             })
 
+        # Close browser cleanly
         browser.close()
 
+    # --------------------------------------------------
+    # Final response
+    # --------------------------------------------------
+    # Returned JSON is consumed by the UI and audit logic.
     return {
         "status": "ok",
         "message": "Full thread parsed successfully",
