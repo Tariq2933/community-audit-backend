@@ -16,8 +16,17 @@ def health_check():
 
 @app.post("/run")
 def run_audit(req: RunRequest):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(req.board, timeout=60000)
+        title = page.title()
+        browser.close()
+
     return {
         "status": "ok",
-        "message": "Request received",
+        "message": "Playwright page loaded successfully",
+        "page_title": title,
         "input": req.model_dump()
     }
+
