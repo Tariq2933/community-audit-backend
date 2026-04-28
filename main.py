@@ -24,7 +24,11 @@ def run_audit(req: RunRequest):
         page.goto(req.board, timeout=60000)
 
         # Wait until thread cards load
-        page.wait_for_selector("a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']", timeout=30000)
+        
+page.wait_for_selector(
+    "a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']",
+    timeout=30000
+)
 
         links = page.locator("a[href*='/questions-']").all()
         seen = set()
