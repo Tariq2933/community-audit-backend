@@ -4,8 +4,6 @@ from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
-
-
 # ----------------------------
 # Request model
 # ----------------------------
@@ -19,8 +17,10 @@ class RunRequest(BaseModel):
 # Health check
 # ----------------------------
 
-@app.post("/run")
+app.post("/run")
 def run_audit(req: RunRequest):
+    import re
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -33,7 +33,7 @@ def run_audit(req: RunRequest):
         )
 
         page = browser.new_page()
-        thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
+        thread_url = req.board
         page.goto(thread_url, timeout=60000)
 
         page.wait_for_selector("h1", timeout=30000)
@@ -64,24 +64,22 @@ def run_audit(req: RunRequest):
                 if role_locator.count() > 0 else "UNKNOWN"
             )
 
-            # Date parsing (ROBUST)
+            # Date parsing
+            posted_ago = "UNKNOWN"
+            posted_date = "UNKNOWN"
 
-    posted_ago = "UNKNOWN"
-    posted_date = "UNKNOWN"
-    import re
-    info_locator = post.locator("div.author-info.dot-seperated")
-    if info_locator.count() > 0:
-        info_text = info_locator.first.text_content().strip()
-        info_text = info_text.replace(author_role, "").replace("·", "").strip()
+            info_locator = post.locator("div.author-info.dot-seperated")
+            if info_locator.count() > 0:
+                info_text = info_locator.first.text_content().strip()
+                info_text = info_text.replace(author_role, "").replace("·", "").strip()
 
-        ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
-        date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
+                ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
+                date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
 
-        if ago_match:
-            posted_ago = ago_match.group(0)
-        if date_match:
-            posted_date = date_match.group(0)
-
+                if ago_match:
+                    posted_ago = ago_match.group(0)
+                if date_match:
+                    posted_date = date_match.group(0)
 
             # Message text
             message_text = ""
@@ -117,3 +115,4 @@ def run_audit(req: RunRequest):
             "posts": posts
         }
     }
+``
