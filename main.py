@@ -70,6 +70,8 @@ def run_audit(req: RunRequest):
 
                 # ---------- Posted time ----------
 
+import re
+
 posted_ago = "UNKNOWN"
 posted_date = "UNKNOWN"
 
@@ -77,17 +79,19 @@ info_locator = post.locator("div.author-info.dot-seperated")
 if info_locator.count() > 0:
     info_text = info_locator.first.text_content().strip()
 
-    # Remove role label
+    # Remove role label if present
     if author_role != "UNKNOWN":
         info_text = info_text.replace(author_role, "").replace("·", "").strip()
 
-    # Expected example: "1 year agoApril 24, 2025"
-    if "ago" in info_text:
-        parts = info_text.split("ago", 1)
-        posted_ago = parts[0].strip() + " ago"
-        posted_date = parts[1].strip() if parts[1].strip() else "UNKNOWN"
-    else:
-        posted_date = info_text
+    # ✅ Regex-based extraction (robust to missing separators)
+    ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
+    date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
+
+    if ago_match:
+        posted_ago = ago_match.group(0)
+
+    if date_match:
+        posted_date = date_match.group(0)
 
 # ---------- Message text (FINAL, CORRECT) ----------
 message_text = ""
