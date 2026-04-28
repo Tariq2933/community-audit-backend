@@ -17,44 +17,64 @@ def health_check():
 
 @app.post("/run")
 def run_audit(req: RunRequest):
-    threads = []
+    result = {}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
+        # 1️⃣ Load board
         page.goto(req.board, timeout=60000)
 
-        # ✅ Wait until thread cards load (INSIDE Playwright context)
         page.wait_for_selector(
             "a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']",
             timeout=30000
         )
 
-        links = page.locator(
+        # 2️⃣ Pick the FIRST thread only
+        thread_link = page.locator(
             "a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']"
-        ).all()
+        ).first
 
-        seen = set()
-        for link in links:
-            href = link.get_attribute("href")
-            if not href:
-                continue
+        thread_url = thread_link.get_attribute("href")
+        if thread_url.startswith("/"):
+            thread_url = "https://community.adobe.com" + thread_url
 
-            if href.startswith("/"):
-                href = "https://community.adobe.com" + href
+        # 3️⃣ Open thread
+        page.goto(thread_url, timeout=60000)
 
-            if href not in seen:
-                seen.add(href)
-                threads.append(href)
+        # 4️⃣ Extract title
+        page.wait_for_selector("h1", timeout=30000)
+        title = page.locator("h1").inner_text()
+
+        # 5️⃣ Extract OP name
+        op_name = page.locator(
+            "[data-testid='author-name'], .lia-user-name"
+        ).first.inner_text()
+
+        # 6️⃣ Extract OP role label (Participant / Expert / Legend / Manager)
+        role_locator = page.locator(
+            ".lia-user-rank, .lia-user-role, .lia-user-label"
+        ).first
+
+        op_role = role_locator.inner_text() if role_locator.count() > 0 else "UNKNOWN"
+
+        # 7️⃣ Count replies
+        reply_count = page.locator(".lia-message-reply").count()
 
         browser.close()
 
+        result = {
+            "thread_url": thread_url,
+            "title": title,
+            "op_name": op_name,
+            "op_role_label": op_role,
+            "reply_count": reply_count
+        }
+
     return {
         "status": "ok",
-        "message": "Thread URLs extracted",
-        "thread_count": len(threads),
-        "threads": threads[:20],  # limit output for now
-        "input": req.model_dump()
+        "message": "Single thread extracted",
+        "thread": result
     }
 
