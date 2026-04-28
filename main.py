@@ -56,6 +56,58 @@ def run_audit(req: RunRequest):
             page.wait_for_selector("h1", timeout=30000)
             title = page.locator("h1").first.text_content().strip()
 
+            
+# =========================
+# OP / Author extraction
+# =========================
+
+# ✅ Always define first_post (safe fallback)
+first_post = page
+
+possible_post_selectors = [
+    "article",
+    ".lia-message",
+    ".lia-message-content",
+    ".lia-message-body"
+]
+
+for selector in possible_post_selectors:
+    locator = page.locator(selector)
+    if locator.count() > 0:
+        first_post = locator.first
+        break
+
+# ✅ AUTHOR NAME (from qa-username link)
+name_locator = first_post.locator(
+    "a.qa-username, a.username"
+)
+
+author_name = (
+    name_locator.first.text_content().strip()
+    if name_locator.count() > 0
+    else "UNKNOWN"
+)
+
+# ✅ AUTHOR ROLE + TIMELINE (from author-info)
+author_info_locator = first_post.locator(
+    "div.author-info"
+)
+
+author_info_text = (
+    author_info_locator.first.text_content().strip()
+    if author_info_locator.count() > 0
+    else ""
+)
+
+author_role = "UNKNOWN"
+posted_ago = "UNKNOWN"
+
+if "·" in author_info_text:
+    author_role, posted_ago = [x.strip() for x in author_info_text.split("·", 1)]
+else:
+    posted_ago = author_info_text
+
+
             # ✅ Fallback-safe first post container
             first_post = page
             possible_post_selectors = [
