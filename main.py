@@ -29,9 +29,21 @@ def run_audit(req: RunRequest):
 
             title = page.locator("h1").inner_text()
 
-            op_name = page.locator(
-                "[data-testid='author-name'], .lia-user-name"
-            ).first.inner_text()
+
+# ✅ Get the first message (Original Post)
+page.wait_for_selector(".lia-message-body", timeout=30000)
+first_post = page.locator(".lia-message-body").first
+
+# ✅ Extract OP name safely
+op_name_locator = first_post.locator(
+    ".lia-user-name, .lia-user-name-link, .lia-message-author"
+)
+
+op_name = (
+    op_name_locator.first.inner_text()
+    if op_name_locator.count() > 0
+    else "UNKNOWN"
+)
 
             role_locator = page.locator(
                 ".lia-user-rank, .lia-user-role, .lia-user-label"
