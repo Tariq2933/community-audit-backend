@@ -19,7 +19,7 @@ class RunRequest(BaseModel):
 # Health check
 # ----------------------------
 
-app.post("/run")
+@app.post("/run")
 def run_audit(req: RunRequest):
     import re
 
