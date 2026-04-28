@@ -21,8 +21,6 @@ class RunRequest(BaseModel):
 
 @app.post("/run")
 def run_audit(req: RunRequest):
-    import re
-
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -70,7 +68,7 @@ def run_audit(req: RunRequest):
 
     posted_ago = "UNKNOWN"
     posted_date = "UNKNOWN"
-
+    import re
     info_locator = post.locator("div.author-info.dot-seperated")
     if info_locator.count() > 0:
         info_text = info_locator.first.text_content().strip()
