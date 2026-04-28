@@ -18,13 +18,6 @@ class RunRequest(BaseModel):
 # ----------------------------
 # Health check
 # ----------------------------
-@app.get("/")
-def health_check():
-    return {"status": "Backend is running"}
-
-# ----------------------------
-# Run audit – full thread traversal
-# ----------------------------
 @app.post("/run")
 def run_audit(req: RunRequest):
     try:
@@ -41,7 +34,6 @@ def run_audit(req: RunRequest):
 
             page = browser.new_page()
 
-            # ✅ Load a thread (using known URL for now)
             thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
             page.goto(thread_url, timeout=60000)
 
@@ -49,20 +41,18 @@ def run_audit(req: RunRequest):
             page.wait_for_selector("h1", timeout=30000)
             title = page.locator("h1").first.text_content().strip()
 
-            # ✅ Collect ALL posts: OP + replies
+            # ✅ OP + replies
             post_blocks = page.locator(
                 "article.topic-wrapper, div.threaded-reply-item[role='article']"
             )
 
-            total_posts = post_blocks.count()
             posts = []
 
-            for i in range(total_posts):
+            for i in range(post_blocks.count()):
                 post = post_blocks.nth(i)
-
                 position = "OP" if i == 0 else "Reply"
 
-                # -------- Author name --------
+                # ---------- Author name ----------
                 name_locator = post.locator("a.qa-username")
                 author_name = (
                     name_locator.first.text_content().strip()
@@ -70,7 +60,7 @@ def run_audit(req: RunRequest):
                     else "UNKNOWN"
                 )
 
-                # -------- Author role --------
+                # ---------- Author role ----------
                 role_locator = post.locator("span.rank-title")
                 author_role = (
                     role_locator.first.text_content().strip()
@@ -78,7 +68,7 @@ def run_audit(req: RunRequest):
                     else "UNKNOWN"
                 )
 
-                # -------- Posted time --------
+                # ---------- Posted time ----------
                 posted_ago = "UNKNOWN"
                 info_locator = post.locator("div.author-info.dot-seperated")
                 if info_locator.count() > 0:
@@ -87,25 +77,22 @@ def run_audit(req: RunRequest):
                         info_text = info_text.replace(author_role, "").replace("·", "").strip()
                     posted_ago = info_text
 
-                # -------- Message text (NEW EDITOR) --------
-                body_locator = post.locator(
+                # ---------- Message text (FINAL LOGIC) ----------
+                message_text = ""
+
+                # ✅ 1. New editor (OP + replies)
+                new_editor = post.locator(
                     "div.post__content.post__content--new-editor"
                 )
-
-                if body_locator.count() > 0:
+                if new_editor.count() > 0:
                     message_text = "\n".join(
-                        body_locator.first.locator("p").all_inner_texts()
+                        new_editor.first.locator("p").all_inner_texts()
                     ).strip()
                 else:
-                    # ✅ Legacy fallback (safe)
-                    legacy_body = post.locator(
-                        "div.post.qa-topic-post-box, .lia-message-body, .lia-message-content"
-                    )
-                    message_text = (
-                        legacy_body.first.text_content().strip()
-                        if legacy_body.count() > 0
-                        else ""
-                    )
+                    # ✅ 2. Legacy fallback
+                    legacy = post.locator("div.post.qa-topic-post-box")
+                    if legacy.count() > 0:
+                        message_text = legacy.first.text_content().strip()
 
                 posts.append({
                     "position": position,
