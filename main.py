@@ -20,7 +20,7 @@ class RunRequest(BaseModel):
 
 @app.post("/run")
 def run_audit(req: RunRequest):
-
+    return {"status": "ok", "message": "Reached backend"}
     # ----------------------------
     # Playwright browser lifecycle
     # ----------------------------
