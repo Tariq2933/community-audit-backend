@@ -45,6 +45,26 @@ def run_audit(req: RunRequest):
             title = page.locator("h1").first.text_content().strip()
             print("Title:", title)
 
+# ✅ Do NOT wait for a specific post container (varies by layout)
+first_post = None
+
+possible_post_selectors = [
+    ".lia-message-body",
+    ".lia-message",
+    ".lia-message-content",
+    "article"
+]
+
+for selector in possible_post_selectors:
+    locator = page.locator(selector)
+    if locator.count() > 0:
+        first_post = locator.first
+        break
+
+# ✅ Fallback if no known container found
+if first_post is None:
+    first_post = page
+
             name_locator = first_post.locator(
                 ".lia-user-name, .lia-user-name-link, .lia-message-author"
             )
