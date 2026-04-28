@@ -4,11 +4,21 @@ from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
+
+
+# ----------------------------
+# Request model
+# ----------------------------
 class RunRequest(BaseModel):
     board: str
     start_date: str
     end_date: str
     filter: str = "all"
+
+# ----------------------------
+# Health check
+# ----------------------------
+
 
 @app.get("/")
 def health_check():
@@ -16,14 +26,16 @@ def health_check():
 
 import traceback
 
+
+# ----------------------------
+# Main run endpoint
+# ----------------------------
+
 @app.post("/run")
 def run_audit(req: RunRequest):
-    print("=== /run called ===")
-    print("Input payload:", req.model_dump())
 
     try:
         with sync_playwright() as p:
-            print("Launching browser...")
             browser = p.chromium.launch(
                 headless=True,
                 args=[
@@ -33,82 +45,82 @@ def run_audit(req: RunRequest):
                     "--single-process"
                 ]
             )
+
             page = browser.new_page()
 
+            # ✅ Load ONE known thread (safe + fast)
             thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
-            print("Navigating to thread:", thread_url)
-
             page.goto(thread_url, timeout=60000)
-            print("Page loaded")
 
+            # ✅ Thread title (always exists)
             page.wait_for_selector("h1", timeout=30000)
             title = page.locator("h1").first.text_content().strip()
-            print("Title:", title)
 
-# ✅ Do NOT wait for a specific post container (varies by layout)
-first_post = None
+            # ✅ Fallback-safe first post container
+            first_post = page
+            possible_post_selectors = [
+                "article",
+                ".lia-message",
+                ".lia-message-content",
+                ".lia-message-body"
+            ]
 
-possible_post_selectors = [
-    ".lia-message-body",
-    ".lia-message",
-    ".lia-message-content",
-    "article"
-]
+            for selector in possible_post_selectors:
+                locator = page.locator(selector)
+                if locator.count() > 0:
+                    first_post = locator.first
+                    break
 
-for selector in possible_post_selectors:
-    locator = page.locator(selector)
-    if locator.count() > 0:
-        first_post = locator.first
-        break
-
-# ✅ Fallback if no known container found
-if first_post is None:
-    first_post = page
-
+            # ✅ AUTHOR NAME (from qa-username)
             name_locator = first_post.locator(
-                ".lia-user-name, .lia-user-name-link, .lia-message-author"
+                "a.qa-username, a.username"
             )
-            op_name = (
+
+            author_name = (
                 name_locator.first.text_content().strip()
                 if name_locator.count() > 0
                 else "UNKNOWN"
             )
-            print("OP name:", op_name)
 
-            role_locator = first_post.locator(
-                ".lia-user-rank, .lia-user-role, .lia-user-label"
+            # ✅ AUTHOR ROLE (from author-info)
+            author_info_locator = first_post.locator(
+                "div.author-info"
             )
-            op_role = (
-                role_locator.first.text_content().strip()
-                if role_locator.count() > 0
-                else "UNKNOWN"
-            )
-            print("OP role:", op_role)
 
+            author_info_text = (
+                author_info_locator.first.text_content().strip()
+                if author_info_locator.count() > 0
+                else ""
+            )
+
+            role = "UNKNOWN"
+            posted_ago = "UNKNOWN"
+
+            if "·" in author_info_text:
+                role, posted_ago = [x.strip() for x in author_info_text.split("·", 1)]
+
+            # ✅ Reply count
             reply_count = page.locator(".lia-message-reply").count()
-            print("Reply count:", reply_count)
 
             browser.close()
-            print("Browser closed")
 
         return {
             "status": "ok",
-            "message": "Thread parsed",
+            "message": "Thread parsed successfully",
             "thread": {
                 "thread_url": thread_url,
                 "title": title,
-                "op_name": op_name,
-                "op_role_label": op_role,
+                "author_name": author_name,
+                "author_role_label": role,
+                "posted_ago": posted_ago,
                 "reply_count": reply_count
             }
         }
 
     except Exception as e:
-        print("=== EXCEPTION ===")
-        traceback.print_exc()
-
         return {
             "status": "error",
             "message": "Backend exception caught",
             "error": str(e)
         }
+
