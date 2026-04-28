@@ -14,6 +14,7 @@ class RunRequest(BaseModel):
 def health_check():
     return {"status": "Backend is running"}
 
+
 @app.post("/run")
 def run_audit(req: RunRequest):
     threads = []
@@ -21,18 +22,20 @@ def run_audit(req: RunRequest):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
+
         page.goto(req.board, timeout=60000)
 
-        # Wait until thread cards load
-        
-page.wait_for_selector(
-    "a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']",
-    timeout=30000
-)
+        # ✅ Wait until thread cards load (INSIDE Playwright context)
+        page.wait_for_selector(
+            "a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']",
+            timeout=30000
+        )
 
-        links = page.locator("a[href*='/questions-']").all()
+        links = page.locator(
+            "a[href*='/questions-'], a[href*='/bugs-'], a[href*='/feature-requests-']"
+        ).all()
+
         seen = set()
-
         for link in links:
             href = link.get_attribute("href")
             if not href:
@@ -54,6 +57,4 @@ page.wait_for_selector(
         "threads": threads[:20],  # limit output for now
         "input": req.model_dump()
     }
-
-
 
