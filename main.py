@@ -14,7 +14,6 @@ class RunRequest(BaseModel):
 def health_check():
     return {"status": "Backend is running"}
 
-
 @app.post("/run")
 def run_audit(req: RunRequest):
     threads = []
@@ -24,19 +23,22 @@ def run_audit(req: RunRequest):
         page = browser.new_page()
         page.goto(req.board, timeout=60000)
 
-        # Wait for thread list to load
+        # Wait until thread cards load
         page.wait_for_selector("a[href*='/questions-']", timeout=30000)
 
-        # Collect thread links
         links = page.locator("a[href*='/questions-']").all()
         seen = set()
 
         for link in links:
             href = link.get_attribute("href")
-            if href and href not in seen:
+            if not href:
+                continue
+
+            if href.startswith("/"):
+                href = "https://community.adobe.com" + href
+
+            if href not in seen:
                 seen.add(href)
-                if href.startswith("/"):
-                    href = "https://community.adobe.com" + href
                 threads.append(href)
 
         browser.close()
@@ -45,8 +47,9 @@ def run_audit(req: RunRequest):
         "status": "ok",
         "message": "Thread URLs extracted",
         "thread_count": len(threads),
-        "threads": threads[:20],  # limit for now
+        "threads": threads[:20],  # limit output for now
         "input": req.model_dump()
     }
+
 
 
