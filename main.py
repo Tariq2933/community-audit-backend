@@ -27,7 +27,6 @@ def health_check():
 # ----------------------------
 @app.post("/run")
 def run_audit(req: RunRequest):
-
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -42,7 +41,7 @@ def run_audit(req: RunRequest):
 
             page = browser.new_page()
 
-            # ✅ Load ONE known thread (safe + deterministic)
+            # ✅ Load a thread (using known URL for now)
             thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
             page.goto(thread_url, timeout=60000)
 
@@ -50,16 +49,20 @@ def run_audit(req: RunRequest):
             page.wait_for_selector("h1", timeout=30000)
             title = page.locator("h1").first.text_content().strip()
 
-            # ✅ Get ALL posts (OP + replies)
-            post_blocks = page.locator("article")
-            post_count = post_blocks.count()
+            # ✅ Collect ALL posts: OP + replies
+            post_blocks = page.locator(
+                "article.topic-wrapper, div.threaded-reply-item[role='article']"
+            )
 
+            total_posts = post_blocks.count()
             posts = []
 
-            for i in range(post_count):
+            for i in range(total_posts):
                 post = post_blocks.nth(i)
 
-                # ---------- Author name ----------
+                position = "OP" if i == 0 else "Reply"
+
+                # -------- Author name --------
                 name_locator = post.locator("a.qa-username")
                 author_name = (
                     name_locator.first.text_content().strip()
@@ -67,7 +70,7 @@ def run_audit(req: RunRequest):
                     else "UNKNOWN"
                 )
 
-                # ---------- Author role ----------
+                # -------- Author role --------
                 role_locator = post.locator("span.rank-title")
                 author_role = (
                     role_locator.first.text_content().strip()
@@ -75,29 +78,37 @@ def run_audit(req: RunRequest):
                     else "UNKNOWN"
                 )
 
-                # ---------- Posted time ----------
-                info_locator = post.locator("div.author-info")
+                # -------- Posted time --------
                 posted_ago = "UNKNOWN"
-
+                info_locator = post.locator("div.author-info.dot-seperated")
                 if info_locator.count() > 0:
                     info_text = info_locator.first.text_content().strip()
                     if author_role != "UNKNOWN":
                         info_text = info_text.replace(author_role, "").replace("·", "").strip()
                     posted_ago = info_text
 
-                # ---------- Message text ----------
+                # -------- Message text (NEW EDITOR) --------
                 body_locator = post.locator(
-                    ".lia-message-body, .lia-message-content"
+                    "div.post__content.post__content--new-editor"
                 )
 
-                message_text = (
-                    body_locator.first.text_content().strip()
-                    if body_locator.count() > 0
-                    else ""
-                )
+                if body_locator.count() > 0:
+                    message_text = "\n".join(
+                        body_locator.first.locator("p").all_inner_texts()
+                    ).strip()
+                else:
+                    # ✅ Legacy fallback (safe)
+                    legacy_body = post.locator(
+                        "div.post.qa-topic-post-box, .lia-message-body, .lia-message-content"
+                    )
+                    message_text = (
+                        legacy_body.first.text_content().strip()
+                        if legacy_body.count() > 0
+                        else ""
+                    )
 
                 posts.append({
-                    "position": "OP" if i == 0 else "Reply",
+                    "position": position,
                     "author_name": author_name,
                     "author_role_label": author_role,
                     "posted_ago": posted_ago,
