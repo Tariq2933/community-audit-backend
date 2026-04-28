@@ -18,19 +18,13 @@ class RunRequest(BaseModel):
 # ----------------------------
 # Health check
 # ----------------------------
-
-
 @app.get("/")
 def health_check():
     return {"status": "Backend is running"}
 
-import traceback
-
-
 # ----------------------------
-# Main run endpoint
+# Run audit – full thread traversal
 # ----------------------------
-
 @app.post("/run")
 def run_audit(req: RunRequest):
 
@@ -48,132 +42,78 @@ def run_audit(req: RunRequest):
 
             page = browser.new_page()
 
-            # ✅ Load ONE known thread (safe + fast)
+            # ✅ Load ONE known thread (safe + deterministic)
             thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
             page.goto(thread_url, timeout=60000)
 
-            # ✅ Thread title (always exists)
+            # ✅ Thread title
             page.wait_for_selector("h1", timeout=30000)
             title = page.locator("h1").first.text_content().strip()
 
-            
+            # ✅ Get ALL posts (OP + replies)
+            post_blocks = page.locator("article")
+            post_count = post_blocks.count()
 
-# =========================
-# Author (OP) extraction
-# =========================
+            posts = []
 
-# ✅ Safe fallback
-first_post = page
+            for i in range(post_count):
+                post = post_blocks.nth(i)
 
-possible_post_selectors = [
-    "article",
-    ".lia-message",
-    ".lia-message-content",
-    ".lia-message-body"
-]
+                # ---------- Author name ----------
+                name_locator = post.locator("a.qa-username")
+                author_name = (
+                    name_locator.first.text_content().strip()
+                    if name_locator.count() > 0
+                    else "UNKNOWN"
+                )
 
-for selector in possible_post_selectors:
-    locator = page.locator(selector)
-    if locator.count() > 0:
-        first_post = locator.first
-        break
+                # ---------- Author role ----------
+                role_locator = post.locator("span.rank-title")
+                author_role = (
+                    role_locator.first.text_content().strip()
+                    if role_locator.count() > 0
+                    else "UNKNOWN"
+                )
 
-# ✅ AUTHOR NAME (qa-username)
-name_locator = first_post.locator(
-    "a.qa-username, a.username"
-)
+                # ---------- Posted time ----------
+                info_locator = post.locator("div.author-info")
+                posted_ago = "UNKNOWN"
 
-author_name = (
-    name_locator.first.text_content().strip()
-    if name_locator.count() > 0
-    else "UNKNOWN"
-)
+                if info_locator.count() > 0:
+                    info_text = info_locator.first.text_content().strip()
+                    if author_role != "UNKNOWN":
+                        info_text = info_text.replace(author_role, "").replace("·", "").strip()
+                    posted_ago = info_text
 
-# ✅ AUTHOR ROLE (rank-title inside author-info)
-role_locator = first_post.locator(
-    "div.author-info span.rank-title"
-)
+                # ---------- Message text ----------
+                body_locator = post.locator(
+                    ".lia-message-body, .lia-message-content"
+                )
 
-author_role = (
-    role_locator.first.text_content().strip()
-    if role_locator.count() > 0
-    else "UNKNOWN"
-)
+                message_text = (
+                    body_locator.first.text_content().strip()
+                    if body_locator.count() > 0
+                    else ""
+                )
 
-# ✅ POSTED TIME (remaining text in author-info)
-author_info_locator = first_post.locator(
-    "div.author-info"
-)
-
-posted_ago = "UNKNOWN"
-
-if author_info_locator.count() > 0:
-    info_text = author_info_locator.first.text_content().strip()
-    # Remove role text if present
-    if author_role != "UNKNOWN":
-        info_text = info_text.replace(author_role, "").replace("·", "").strip()
-    posted_ago = info_text
-
-
-
-            # ✅ Fallback-safe first post container
-            first_post = page
-            possible_post_selectors = [
-                "article",
-                ".lia-message",
-                ".lia-message-content",
-                ".lia-message-body"
-            ]
-
-            for selector in possible_post_selectors:
-                locator = page.locator(selector)
-                if locator.count() > 0:
-                    first_post = locator.first
-                    break
-
-            # ✅ AUTHOR NAME (from qa-username)
-            name_locator = first_post.locator(
-                "a.qa-username, a.username"
-            )
-
-            author_name = (
-                name_locator.first.text_content().strip()
-                if name_locator.count() > 0
-                else "UNKNOWN"
-            )
-
-            # ✅ AUTHOR ROLE (from author-info)
-            author_info_locator = first_post.locator(
-                "div.author-info"
-            )
-
-            author_info_text = (
-                author_info_locator.first.text_content().strip()
-                if author_info_locator.count() > 0
-                else ""
-            )
-
-            role = "UNKNOWN"
-            posted_ago = "UNKNOWN"
-
-            if "·" in author_info_text:
-                role, posted_ago = [x.strip() for x in author_info_text.split("·", 1)]
-
-            # ✅ Reply count
-            reply_count = page.locator(".lia-message-reply").count()
+                posts.append({
+                    "position": "OP" if i == 0 else "Reply",
+                    "author_name": author_name,
+                    "author_role_label": author_role,
+                    "posted_ago": posted_ago,
+                    "message_text": message_text
+                })
 
             browser.close()
 
         return {
             "status": "ok",
-            "message": "Thread parsed successfully",
+            "message": "Full thread parsed successfully",
             "thread": {
                 "thread_url": thread_url,
                 "title": title,
-                "author_name": author_name,
-                "author_role_label": role,
-                "posted_ago": posted_ago,
-                "reply_count": reply_count
+                "total_posts": len(posts),
+                "posts": posts
             }
         }
 
@@ -183,4 +123,3 @@ if author_info_locator.count() > 0:
             "message": "Backend exception caught",
             "error": str(e)
         }
-
