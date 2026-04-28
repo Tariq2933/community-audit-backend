@@ -17,121 +17,101 @@ class RunRequest(BaseModel):
 # Health check
 # ----------------------------
 
-@app.post("/run") 
+
+@app.post("/run")
 def run_audit(req: RunRequest):
-    import re
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--single-process"
-                ]
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--single-process"
+            ]
+        )
+
+        page = browser.new_page()
+        thread_url = req.board
+        page.goto(thread_url, timeout=60000)
+
+        page.wait_for_selector("h1", timeout=30000)
+        title = page.locator("h1").first.text_content().strip()
+
+        post_blocks = page.locator(
+            "article.topic-wrapper, div.threaded-reply-item[role='article']"
+        )
+
+        posts = []
+
+        for i in range(post_blocks.count()):
+            post = post_blocks.nth(i)
+            position = "OP" if i == 0 else "Reply"
+
+            # Author name
+            name_locator = post.locator("a.qa-username")
+            author_name = (
+                name_locator.first.text_content().strip()
+                if name_locator.count() > 0 else "UNKNOWN"
             )
 
-            page = browser.new_page()
-
-            thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
-            page.goto(thread_url, timeout=60000)
-
-            # ✅ Thread title
-            page.wait_for_selector("h1", timeout=30000)
-            title = page.locator("h1").first.text_content().strip()
-
-            # ✅ OP + replies
-            post_blocks = page.locator(
-                "article.topic-wrapper, div.threaded-reply-item[role='article']"
+            # Author role
+            role_locator = post.locator("span.rank-title")
+            author_role = (
+                role_locator.first.text_content().strip()
+                if role_locator.count() > 0 else "UNKNOWN"
             )
 
-            posts = []
+            # Date parsing
+            posted_ago = "UNKNOWN"
+            posted_date = "UNKNOWN"
 
-            for i in range(post_blocks.count()):
-                post = post_blocks.nth(i)
-                position = "OP" if i == 0 else "Reply"
+            info_locator = post.locator("div.author-info.dot-seperated")
+            if info_locator.count() > 0:
+                info_text = info_locator.first.text_content().strip()
+                info_text = info_text.replace(author_role, "").replace("·", "").strip()
 
-                # ---------- Author name ----------
-                name_locator = post.locator("a.qa-username")
-                author_name = (
-                    name_locator.first.text_content().strip()
-                    if name_locator.count() > 0
-                    else "UNKNOWN"
+                ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
+                date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
+
+                if ago_match:
+                    posted_ago = ago_match.group(0)
+                if date_match:
+                    posted_date = date_match.group(0)
+
+            # Message text
+            message_text = ""
+            new_editor = post.locator("div.post__content.post__content--new-editor")
+            if new_editor.count() > 0:
+                message_text = "\n".join(
+                    p.strip()
+                    for p in new_editor.first.locator("p").all_inner_texts()
+                    if p.strip()
                 )
+            else:
+                legacy = post.locator("div.post.qa-topic-post-box")
+                if legacy.count() > 0:
+                    message_text = legacy.first.text_content().strip()
 
-                # ---------- Author role ----------
-                role_locator = post.locator("span.rank-title")
-                author_role = (
-                    role_locator.first.text_content().strip()
-                    if role_locator.count() > 0
-                    else "UNKNOWN"
-                )
+            posts.append({
+                "position": position,
+                "author_name": author_name,
+                "author_role_label": author_role,
+                "posted_ago": posted_ago,
+                "posted_date": posted_date,
+                "message_text": message_text
+            })
 
-                # ---------- Posted time ----------
+        browser.close()
 
-posted_ago = "UNKNOWN"
-posted_date = "UNKNOWN"
-
-info_locator = post.locator("div.author-info.dot-seperated")
-if info_locator.count() > 0:
-    info_text = info_locator.first.text_content().strip()
-
-    if author_role != "UNKNOWN":
-        info_text = info_text.replace(author_role, "").replace("·", "").strip()
-
-    ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
-    date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
-
-    if ago_match:
-        posted_ago = ago_match.group(0)
-
-    if date_match:
-        posted_date = date_match.group(0)
-
-# ---------- Message text (FINAL, CORRECT) ----------
-message_text = ""
-
-# ✅ Preferred: NEW editor (OP + replies)
-new_editor = post.locator("div.post__content.post__content--new-editor")
-if new_editor.count() > 0:
-    message_text = "\n".join(
-        p.strip()
-        for p in new_editor.first.locator("p").all_inner_texts()
-        if p.strip()
-    )
-
-else:
-    # ✅ Fallback: LEGACY OP wrapper (id=topicXXXX, class=post qa-topic-post-box)
-    legacy = post.locator("div.post.qa-topic-post-box")
-    if legacy.count() > 0:
-        message_text = legacy.first.text_content().strip()
-
-
-                posts.append({
-                    "position": position,
-                    "author_name": author_name,
-                    "author_role_label": author_role,
-                    "posted_ago": posted_ago,
-                    "message_text": message_text
-                })
-
-            browser.close()
-
-        return {
-            "status": "ok",
-            "message": "Full thread parsed successfully",
-            "thread": {
-                "thread_url": thread_url,
-                "title": title,
-                "total_posts": len(posts),
-                "posts": posts
-            }
+    return {
+        "status": "ok",
+        "message": "Full thread parsed successfully",
+        "thread": {
+            "thread_url": thread_url,
+            "title": title,
+            "total_posts": len(posts),
+            "posts": posts
         }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": "Backend exception caught",
-            "error": str(e)
-        }
+    }
