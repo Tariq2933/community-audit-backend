@@ -47,7 +47,8 @@ def run_audit(req: RunRequest):
         # IMPORTANT:
         # req.board MUST be a FULL THREAD URL, e.g.
         # https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-...-1301933
-        thread_url = req.board
+        #thread_url = req.board
+        thread_url = "https://community.adobe.com/questions-9/pdf-pages-go-blank-1246322"
         page.goto(thread_url, timeout=60000)
 
         # ----------------------------
