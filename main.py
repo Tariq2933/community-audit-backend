@@ -17,8 +17,9 @@ class RunRequest(BaseModel):
 # Health check
 # ----------------------------
 
-@app.post("/run")
+@app.post("/run") 
 def run_audit(req: RunRequest):
+    import re
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -71,8 +72,6 @@ def run_audit(req: RunRequest):
 
 posted_ago = "UNKNOWN"
 posted_date = "UNKNOWN"
-
-import re
 
 info_locator = post.locator("div.author-info.dot-seperated")
 if info_locator.count() > 0:
