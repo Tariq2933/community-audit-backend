@@ -67,21 +67,23 @@ def run_audit(req: RunRequest):
             )
 
             # Date parsing (ROBUST)
-            posted_ago = "UNKNOWN"
-            posted_date = "UNKNOWN"
 
-            info_locator = post.locator("div.author-info.dot-seperated")
-            if info_locator.count() > 0:
-                info_text = info_locator.first.text_content().strip()
-                info_text = info_text.replace(author_role, "").replace("·", "").strip()
+    posted_ago = "UNKNOWN"
+    posted_date = "UNKNOWN"
 
-                ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
-                date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
+    info_locator = post.locator("div.author-info.dot-seperated")
+    if info_locator.count() > 0:
+        info_text = info_locator.first.text_content().strip()
+        info_text = info_text.replace(author_role, "").replace("·", "").strip()
 
-                if ago_match:
-                    posted_ago = ago_match.group(0)
-                if date_match:
-                    posted_date = date_match.group(0)
+        ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
+        date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
+
+        if ago_match:
+            posted_ago = ago_match.group(0)
+        if date_match:
+            posted_date = date_match.group(0)
+
 
             # Message text
             message_text = ""
