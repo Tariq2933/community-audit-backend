@@ -35,7 +35,7 @@ def run_audit(req: RunRequest):
         )
 
         page = browser.new_page()
-        thread_url = req.board
+        thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
         page.goto(thread_url, timeout=60000)
 
         page.wait_for_selector("h1", timeout=30000)
