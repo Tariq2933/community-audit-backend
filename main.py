@@ -17,7 +17,7 @@ class RunRequest(BaseModel):
 # Health check
 # ----------------------------
 
-app.post("/run")
+@app.post("/run")
 def run_audit(req: RunRequest):
     import re
 
@@ -47,7 +47,6 @@ def run_audit(req: RunRequest):
 
         for i in range(post_blocks.count()):
             post = post_blocks.nth(i)
-
             position = "OP" if i == 0 else "Reply"
 
             # Author name
@@ -64,7 +63,7 @@ def run_audit(req: RunRequest):
                 if role_locator.count() > 0 else "UNKNOWN"
             )
 
-            # Date parsing
+            # Date parsing (robust)
             posted_ago = "UNKNOWN"
             posted_date = "UNKNOWN"
 
@@ -86,7 +85,8 @@ def run_audit(req: RunRequest):
             new_editor = post.locator("div.post__content.post__content--new-editor")
             if new_editor.count() > 0:
                 message_text = "\n".join(
-                    p.strip() for p in new_editor.first.locator("p").all_inner_texts()
+                    p.strip()
+                    for p in new_editor.first.locator("p").all_inner_texts()
                     if p.strip()
                 )
             else:
@@ -115,3 +115,4 @@ def run_audit(req: RunRequest):
             "posts": posts
         }
     }
+
