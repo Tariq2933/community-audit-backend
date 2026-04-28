@@ -69,10 +69,10 @@ def run_audit(req: RunRequest):
 
                 # ---------- Posted time ----------
 
-import re
-
 posted_ago = "UNKNOWN"
 posted_date = "UNKNOWN"
+
+import re
 
 info_locator = post.locator("div.author-info.dot-seperated")
 if info_locator.count() > 0:
