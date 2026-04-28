@@ -14,43 +14,50 @@ class RunRequest(BaseModel):
 def health_check():
     return {"status": "Backend is running"}
 
+
 @app.post("/run")
 def run_audit(req: RunRequest):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
 
-        # ✅ Directly open a known thread (fast, no board crawl)
-        thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
+            thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
 
-        page.goto(thread_url, timeout=60000)
+            page.goto(thread_url, timeout=60000)
+            page.wait_for_selector("h1", timeout=30000)
 
-        page.wait_for_selector("h1", timeout=30000)
-        title = page.locator("h1").inner_text()
+            title = page.locator("h1").inner_text()
 
-        op_name = page.locator(
-            "[data-testid='author-name'], .lia-user-name"
-        ).first.inner_text()
+            op_name = page.locator(
+                "[data-testid='author-name'], .lia-user-name"
+            ).first.inner_text()
 
-        role_locator = page.locator(
-            ".lia-user-rank, .lia-user-role, .lia-user-label"
-        ).first
+            role_locator = page.locator(
+                ".lia-user-rank, .lia-user-role, .lia-user-label"
+            ).first
 
-        op_role = role_locator.inner_text() if role_locator.count() > 0 else "UNKNOWN"
+            op_role = role_locator.inner_text() if role_locator.count() > 0 else "UNKNOWN"
 
-        reply_count = page.locator(".lia-message-reply").count()
+            reply_count = page.locator(".lia-message-reply").count()
 
-        browser.close()
+            browser.close()
 
-    return {
-        "status": "ok",
-        "message": "Thread page loaded (safe mode)",
-        "thread": {
-            "thread_url": thread_url,
-            "title": title,
-            "op_name": op_name,
-            "op_role_label": op_role,
-            "reply_count": reply_count
+        return {
+            "status": "ok",
+            "message": "Thread page parsed successfully",
+            "thread": {
+                "thread_url": thread_url,
+                "title": title,
+                "op_name": op_name,
+                "op_role_label": op_role,
+                "reply_count": reply_count
+            }
         }
-    }
 
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": "Backend exception caught",
+            "error": str(e)
+        }
