@@ -77,22 +77,24 @@ def run_audit(req: RunRequest):
                         info_text = info_text.replace(author_role, "").replace("·", "").strip()
                     posted_ago = info_text
 
-                # ---------- Message text (FINAL LOGIC) ----------
-                message_text = ""
+# ---------- Message text (FINAL, CORRECT) ----------
+message_text = ""
 
-                # ✅ 1. New editor (OP + replies)
-                new_editor = post.locator(
-                    "div.post__content.post__content--new-editor"
-                )
-                if new_editor.count() > 0:
-                    message_text = "\n".join(
-                        new_editor.first.locator("p").all_inner_texts()
-                    ).strip()
-                else:
-                    # ✅ 2. Legacy fallback
-                    legacy = post.locator("div.post.qa-topic-post-box")
-                    if legacy.count() > 0:
-                        message_text = legacy.first.text_content().strip()
+# ✅ Preferred: NEW editor (OP + replies)
+new_editor = post.locator("div.post__content.post__content--new-editor")
+if new_editor.count() > 0:
+    message_text = "\n".join(
+        p.strip()
+        for p in new_editor.first.locator("p").all_inner_texts()
+        if p.strip()
+    )
+
+else:
+    # ✅ Fallback: LEGACY OP wrapper (id=topicXXXX, class=post qa-topic-post-box)
+    legacy = post.locator("div.post.qa-topic-post-box")
+    if legacy.count() > 0:
+        message_text = legacy.first.text_content().strip()
+
 
                 posts.append({
                     "position": position,
