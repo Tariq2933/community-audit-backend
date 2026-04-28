@@ -14,36 +14,40 @@ class RunRequest(BaseModel):
 def health_check():
     return {"status": "Backend is running"}
 
-
+import traceback
 
 @app.post("/run")
 def run_audit(req: RunRequest):
+    print("=== /run called ===")
+    print("Input payload:", req.model_dump())
+
     try:
         with sync_playwright() as p:
-browser = p.chromium.launch(
-    headless=True,
-    args=[
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--single-process"
-    ]
-)
+            print("Launching browser...")
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--single-process"
+                ]
+            )
             page = browser.new_page()
 
-            # ✅ Open ONE known thread directly (fast + deterministic)
             thread_url = "https://community.adobe.com/questions-9/how-to-turn-off-grey-popups-when-hovering-over-images-1301933"
-            page.goto(thread_url, timeout=60000)
+            print("Navigating to thread:", thread_url)
 
-            # ✅ Title (this always exists)
+            page.goto(thread_url, timeout=60000)
+            print("Page loaded")
+
             page.wait_for_selector("h1", timeout=30000)
             title = page.locator("h1").first.text_content().strip()
+            print("Title:", title)
 
-            # ✅ Get first message container ONLY
             page.wait_for_selector(".lia-message-body", timeout=30000)
             first_post = page.locator(".lia-message-body").first
 
-            # ✅ OP name — NON BLOCKING
             name_locator = first_post.locator(
                 ".lia-user-name, .lia-user-name-link, .lia-message-author"
             )
@@ -52,8 +56,8 @@ browser = p.chromium.launch(
                 if name_locator.count() > 0
                 else "UNKNOWN"
             )
+            print("OP name:", op_name)
 
-            # ✅ OP role — NON BLOCKING
             role_locator = first_post.locator(
                 ".lia-user-rank, .lia-user-role, .lia-user-label"
             )
@@ -62,15 +66,17 @@ browser = p.chromium.launch(
                 if role_locator.count() > 0
                 else "UNKNOWN"
             )
+            print("OP role:", op_role)
 
-            # ✅ Reply count — SAFE
             reply_count = page.locator(".lia-message-reply").count()
+            print("Reply count:", reply_count)
 
             browser.close()
+            print("Browser closed")
 
         return {
             "status": "ok",
-            "message": "Thread parsed without blocking",
+            "message": "Thread parsed",
             "thread": {
                 "thread_url": thread_url,
                 "title": title,
@@ -81,9 +87,11 @@ browser = p.chromium.launch(
         }
 
     except Exception as e:
+        print("=== EXCEPTION ===")
+        traceback.print_exc()
+
         return {
             "status": "error",
             "message": "Backend exception caught",
             "error": str(e)
         }
-
