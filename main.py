@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from playwright.sync_api import sync_playwright
 
 app = FastAPI()
 
