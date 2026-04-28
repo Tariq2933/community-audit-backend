@@ -79,11 +79,9 @@ info_locator = post.locator("div.author-info.dot-seperated")
 if info_locator.count() > 0:
     info_text = info_locator.first.text_content().strip()
 
-    # Remove role label if present
     if author_role != "UNKNOWN":
         info_text = info_text.replace(author_role, "").replace("·", "").strip()
 
-    # ✅ Regex-based extraction (robust to missing separators)
     ago_match = re.search(r"\b\d+\s+\w+\s+ago\b", info_text)
     date_match = re.search(r"\b[A-Z][a-z]+\s+\d{1,2},\s+\d{4}\b", info_text)
 
