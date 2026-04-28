@@ -77,19 +77,17 @@ info_locator = post.locator("div.author-info.dot-seperated")
 if info_locator.count() > 0:
     info_text = info_locator.first.text_content().strip()
 
-    # Remove role text
+    # Remove role label
     if author_role != "UNKNOWN":
         info_text = info_text.replace(author_role, "").replace("·", "").strip()
 
-    # Example after cleanup:
-    # "1 year agoApril 24, 2025"
+    # Expected example: "1 year agoApril 24, 2025"
     if "ago" in info_text:
         parts = info_text.split("ago", 1)
         posted_ago = parts[0].strip() + " ago"
         posted_date = parts[1].strip() if parts[1].strip() else "UNKNOWN"
     else:
         posted_date = info_text
-
 
 # ---------- Message text (FINAL, CORRECT) ----------
 message_text = ""
