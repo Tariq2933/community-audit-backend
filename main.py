@@ -45,9 +45,6 @@ def run_audit(req: RunRequest):
             title = page.locator("h1").first.text_content().strip()
             print("Title:", title)
 
-            page.wait_for_selector(".lia-message-body", timeout=30000)
-            first_post = page.locator(".lia-message-body").first
-
             name_locator = first_post.locator(
                 ".lia-user-name, .lia-user-name-link, .lia-message-author"
             )
